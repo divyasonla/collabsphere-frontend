@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import api from '../services/api';
+import AIResultModal from './AIResultModal';
 
 // determine backend base URL (remove trailing /api if present)
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api';
@@ -34,6 +36,9 @@ const FilePreviewModal = ({ open, onClose, file, content, type }) => {
           )}
         </div>
         <div className="p-4 border-t flex justify-end bg-white">
+          {type === 'text' && (
+            <button onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('file-explain', { detail: { file, content } })); }} className="mr-3 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition">Explain</button>
+          )}
           <a href={`${BACKEND_BASE}/uploads/${file.filename}`} target="_blank" rel="noreferrer" className="px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors font-medium shadow-sm">
             Open in New Tab
           </a>
@@ -47,6 +52,41 @@ const FileList = ({ files }) => {
   const [previewFile, setPreviewFile] = useState(null);
   const [previewContent, setPreviewContent] = useState('');
   const [previewType, setPreviewType] = useState('');
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiResult, setAiResult] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiTitle, setAiTitle] = useState('AI Explanation');
+
+  useEffect(() => {
+    const handler = (e) => {
+      const { file, content } = e.detail || {};
+      if (!file || !content) return;
+      handleExplain(file, content);
+    };
+    window.addEventListener('file-explain', handler);
+    return () => window.removeEventListener('file-explain', handler);
+  }, []);
+
+  const handleExplain = async (file, content) => {
+    setAiLoading(true);
+    setAiTitle(`Explanation: ${file.originalName}`);
+    try {
+      const language = file.mimeType?.split('/')?.[1] || 'text';
+      const res = await api.post('/gemini/explain', { text: content, language });
+      if (res?.data?.success) setAiResult(res.data.data);
+      else if (res?.data) setAiResult(JSON.stringify(res.data));
+      else setAiResult('No explanation returned');
+    } catch (err) {
+        if (err.response && err.response.status === 401) {
+          alert('Please log in to use the Explain feature.');
+          return;
+        }
+      setAiResult(err.response?.data?.message || err.message || 'AI explain failed');
+    } finally {
+      setAiLoading(false);
+      setAiOpen(true);
+    }
+  };
 
   if (!files || files.length === 0) {
     return (
@@ -113,6 +153,13 @@ const FileList = ({ files }) => {
         file={previewFile}
         content={previewContent}
         type={previewType}
+      />
+      <AIResultModal
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        title={aiTitle}
+        result={aiResult}
+        isLoading={aiLoading}
       />
     </>
   );

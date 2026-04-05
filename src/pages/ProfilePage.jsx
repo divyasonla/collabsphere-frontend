@@ -1,28 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 
-const DaySquare = ({ date, count }) => {
-  const level = Math.min(count || 0, 4);
+const MonthSquare = ({ label, count }) => {
+  const level = Math.min(Math.floor((count || 0) / 1), 4);
   const colors = ['bg-gray-200', 'bg-green-200', 'bg-green-300', 'bg-green-500', 'bg-green-700'];
-  const title = `${date} — ${count || 0} project(s)`;
+  const title = `${label} — ${count || 0} project(s)`;
   return (
-    <div title={title} className={`w-6 h-6 rounded-sm ${colors[level]} border`} />
+    <div title={title} className="flex flex-col items-center">
+      <div className={`w-12 h-8 rounded-sm ${colors[level]} border flex items-center justify-center text-xs`}>{count||0}</div>
+      <div className="text-xs text-gray-600 mt-1">{label}</div>
+    </div>
   );
 };
 
-const lastNDates = (n) => {
-  const dates = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    dates.push(d.toISOString().slice(0, 10));
+const monthsRange = (centerDate, before = 6, after = 6) => {
+  const months = [];
+  for (let i = -before; i <= after; i++) {
+    const d = new Date(centerDate.getFullYear(), centerDate.getMonth() + i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
+    months.push({ date: d, key });
   }
-  return dates;
+  return months;
 };
 
 const ProfilePage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [monthCounts, setMonthCounts] = useState({});
 
   useEffect(() => {
     const load = async () => {
@@ -30,6 +34,14 @@ const ProfilePage = () => {
       try {
         const { data } = await api.get('/users/me/profile');
         setData(data);
+        // derive month-wise counts from submissionsByDate (YYYY-MM-DD -> YYYY-MM)
+        const byDate = data.submissionsByDate || {};
+        const byMonth = {};
+        Object.keys(byDate).forEach(d => {
+          const month = d.slice(0, 7);
+          byMonth[month] = (byMonth[month] || 0) + (byDate[d] || 0);
+        });
+        setMonthCounts(byMonth);
       } catch (err) {
         console.error(err);
       } finally {
@@ -41,7 +53,7 @@ const ProfilePage = () => {
 
   if (loading || !data) return <div className="p-6">Loading profile...</div>;
 
-  const dates = lastNDates(30);
+  const months = monthsRange(new Date(), 6, 6); // -6..+6 months
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -56,11 +68,13 @@ const ProfilePage = () => {
         </div>
 
         <div className="mt-6">
-          <h3 className="font-semibold mb-2">Activity (last 30 days)</h3>
-          <div className="flex flex-wrap gap-1">
-            {dates.map(d => (
-              <DaySquare key={d} date={d} count={data.submissionsByDate[d] || 0} />
-            ))}
+          <h3 className="font-semibold mb-2">Activity (last 6 months — next 6 months)</h3>
+          <div className="grid grid-cols-7 gap-4">
+            {months.map(m => {
+              const label = new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(m.date);
+              const count = monthCounts[m.key] || 0;
+              return <MonthSquare key={m.key} label={label} count={count} />;
+            })}
           </div>
         </div>
 

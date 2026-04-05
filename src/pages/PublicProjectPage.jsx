@@ -15,9 +15,9 @@ const PublicProjectPage = () => {
     const load = async () => {
       const p = await projectService.getPublicProject(id);
       if (!p?.error) setProject(p);
-      const n = await notesService.getNotesByProject(id);
+      const n = await notesService.getPublicNotes(id);
       if (!n?.error) setNotes(n);
-      const f = await fileService.getFilesByProject(id);
+      const f = await fileService.getPublicFiles(id);
       if (!f?.error) setFiles(f);
     };
     load();

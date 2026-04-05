@@ -26,4 +26,13 @@ const getFilesByProject = async (projectId) => {
   }
 };
 
-export default { uploadFile, getFilesByProject };
+const getPublicFiles = async (publicId) => {
+  try {
+    const { data } = await api.get(`/files/public/${publicId}`);
+    return data;
+  } catch (err) {
+    return { error: err.response?.data?.message || err.message };
+  }
+};
+
+export default { uploadFile, getFilesByProject, getPublicFiles };

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import projectService from '../services/projectService';
+import { AuthContext } from '../context/AuthContext';
 import notesService from '../services/notesService';
 import fileService from '../services/fileService';
 import geminiService from '../services/geminiService';
@@ -20,10 +21,14 @@ const ProjectPage = () => {
   const [analytics, setAnalytics] = useState(null);
   const [memberEmail, setMemberEmail] = useState('');
   const [addingMember, setAddingMember] = useState(false);
-
+  const [shareUrl, setShareUrl] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const { user } = useContext(AuthContext);
   // Loading and Error States
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingNote, setIsSavingNote] = useState(false);
+  const navigate = useNavigate();
+  const isOwner = user && project && (String(project.owner._id || project.owner) === String(user._id || user.id || user));
   const [error, setError] = useState(null);
 
   // AI States
@@ -36,10 +41,14 @@ const ProjectPage = () => {
       try {
         setIsLoading(true);
         setError(null);
-
         const p = await projectService.getProject(id);
         if (p?.error) throw new Error(p.error);
         setProject(p);
+
+        if (p?.isPublic && p?.publicId) {
+          const url = `${window.location.origin}/public/project/${p.publicId}`;
+          setShareUrl(url);
+        }
 
         const n = await notesService.getNotesByProject(id);
         if (!n?.error) setNotes(n);
@@ -106,7 +115,7 @@ const ProjectPage = () => {
           <p>{error}</p>
         </div>
       ) : project ? (
-        <>
+        <div>
           <div className="bg-white p-6 rounded-lg shadow-sm border mb-6">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">{project.title}</h2>
             <p className="text-gray-600 text-lg">{project.description}</p>
@@ -206,45 +215,97 @@ const ProjectPage = () => {
                 <FileList files={files} />
               </div>
 
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
-                <h3 className="font-bold text-xl mb-4 border-b pb-2">Members</h3>
-                <div className="space-y-3 mb-4 max-h-40 overflow-auto pr-2">
-                  {(project.members || []).map(m => (
-                    <div key={m._id || m} className="flex items-center justify-between p-2 rounded border bg-gray-50">
-                      <div>
-                        <div className="font-medium text-sm">{m.name || m.email || 'Member'}</div>
-                        <div className="text-xs text-gray-500">{m.email || ''}</div>
+                <div className="bg-white p-6 rounded-lg shadow-sm border">
+                  <h3 className="font-bold text-xl mb-4 border-b pb-2">Members</h3>
+                  <div className="space-y-3 mb-4 max-h-40 overflow-auto pr-2">
+                    {(project.members || []).map(m => (
+                      <div key={m._id || m} className="flex items-center justify-between p-2 rounded border bg-gray-50">
+                        <div>
+                          <div className="font-medium text-sm">{m.name || m.email || 'Member'}</div>
+                          <div className="text-xs text-gray-500">{m.email || ''}</div>
+                        </div>
+                        <div className="text-xs text-gray-400">{project.owner && String(project.owner._id || project.owner) === String(m._id || m) ? 'Owner' : ''}</div>
                       </div>
-                      <div className="text-xs text-gray-400">{project.owner && (project.owner._id || project.owner) === (m._id || m) ? 'Owner' : ''}</div>
+                    ))}
+                  </div>
+                  {isOwner ? (
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <input value={memberEmail} onChange={(e)=>setMemberEmail(e.target.value)} placeholder="Invite by email" className="flex-1 px-3 py-2 border rounded" />
+                        <button onClick={async ()=>{
+                          if (!memberEmail) return alert('Enter email');
+                          try {
+                            setAddingMember(true);
+                            const res = await projectService.addMember(id, { email: memberEmail });
+                            if (res?.error) {
+                              alert(res.error || 'Failed to add member');
+                            } else {
+                              const updated = await projectService.getProject(id);
+                              if (!updated?.error) setProject(updated);
+                              setMemberEmail('');
+                            }
+                          } catch (err) {
+                            alert(err.message || 'Error adding member');
+                          } finally {
+                            setAddingMember(false);
+                          }
+                        }} className="px-3 py-2 bg-indigo-600 text-white rounded">{addingMember ? 'Adding...' : 'Add'}</button>
+                      </div>
+
+                      <div className="mt-4 border-t pt-4">
+                        <h4 className="font-semibold mb-2">Public Share</h4>
+                        <div className="flex items-center gap-2">
+                          <button onClick={async () => {
+                            try {
+                              setSharing(true);
+                              const res = await projectService.shareProject(id);
+                              if (res?.error) return alert(res.error);
+                              const url = res.shareUrl || `${window.location.origin}/public/project/${res.publicId}`;
+                              setShareUrl(url);
+                              navigator.clipboard.writeText(url);
+                              alert('Project shared. Link copied to clipboard');
+                            } catch (err) {
+                              alert(err.message || 'Share failed');
+                            } finally { setSharing(false); }
+                          }} className="px-3 py-2 bg-green-600 text-white rounded">{sharing ? 'Sharing...' : 'Make Public & Copy Link'}</button>
+                          <button onClick={async () => {
+                            try {
+                              setSharing(true);
+                              const res = await projectService.unshareProject(id);
+                              if (res?.error) return alert(res.error);
+                              setShareUrl('');
+                              alert('Project unshared');
+                            } catch (err) {
+                              alert(err.message || 'Unshare failed');
+                            } finally { setSharing(false); }
+                          }} className="px-3 py-2 bg-red-100 text-red-700 rounded">Unshare</button>
+                        </div>
+                        {project.isPublic && shareUrl && <div className="mt-3 text-sm text-gray-600">Public Link: <a className="text-indigo-600 underline" href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a></div>}
+                      </div>
+
+                      <div className="mt-4">
+                        <button className="w-full px-3 py-2 bg-red-600 text-white rounded" onClick={async ()=>{
+                          if (!confirm('Delete this project and all its notes/files? This cannot be undone.')) return;
+                          try {
+                            const res = await projectService.deleteProject(id);
+                            if (res?.error) return alert(res.error || 'Delete failed');
+                            alert('Project deleted');
+                            navigate('/');
+                          } catch (err) {
+                            alert(err.message || 'Delete failed');
+                          }
+                        }}>Delete Project</button>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-3">
-                  <input value={memberEmail} onChange={(e)=>setMemberEmail(e.target.value)} placeholder="Invite by email" className="flex-1 px-3 py-2 border rounded" />
-                  <button onClick={async ()=>{
-                    if (!memberEmail) return alert('Enter email');
-                    try {
-                      setAddingMember(true);
-                      const res = await projectService.addMember(id, { email: memberEmail });
-                      if (res?.error) {
-                        alert(res.error || 'Failed to add member');
-                      } else {
-                        const updated = await projectService.getProject(id);
-                        if (!updated?.error) setProject(updated);
-                        setMemberEmail('');
-                      }
-                    } catch (err) {
-                      alert(err.message || 'Error adding member');
-                    } finally {
-                      setAddingMember(false);
-                    }
-                  }} className="px-3 py-2 bg-indigo-600 text-white rounded">{addingMember ? 'Adding...' : 'Add'}</button>
+                  ) : (
+                    <div className="text-sm text-gray-500">Only project owner can invite members or change share settings.</div>
+                  )}
                 </div>
               </div>
 
             </div>
           </div>
-        </>
+        // </div>
       ) : null}
 
       <AIResultModal

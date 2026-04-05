@@ -9,4 +9,12 @@ export default defineConfig({
     // tailwindcss(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  server: {
+    watch: {
+      // ignore large folders and use polling to avoid hitting inotify limits (EMFILE)
+      ignored: ['**/node_modules/**', '**/.git/**', '../server/**', 'uploads/**'],
+      usePolling: true,
+      interval: 1000
+    }
+  }
 })

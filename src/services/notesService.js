@@ -18,6 +18,15 @@ const getNotesByProject = async (projectId) => {
   }
 };
 
+const getPublicNotes = async (publicId) => {
+  try {
+    const { data } = await api.get(`/notes/public/${publicId}`);
+    return data;
+  } catch (err) {
+    return { error: err.response?.data?.message || err.message };
+  }
+};
+
 const updateNote = async (id, payload) => {
   try {
     const { data } = await api.put(`/notes/${id}`, payload);
@@ -36,4 +45,4 @@ const deleteNote = async (id) => {
   }
 };
 
-export default { createNote, getNotesByProject, updateNote, deleteNote };
+export default { createNote, getNotesByProject, getPublicNotes, updateNote, deleteNote };

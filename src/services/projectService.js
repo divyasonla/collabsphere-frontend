@@ -45,4 +45,31 @@ const getPublicProject = async (id) => {
   }
 };
 
-export default { getMyProjects, createProject, getProject, addMember, getPublicProject };
+const shareProject = async (id) => {
+  try {
+    const { data } = await api.post(`/projects/${id}/share`);
+    return data;
+  } catch (err) {
+    return { error: err.response?.data?.message || err.message };
+  }
+};
+
+const unshareProject = async (id) => {
+  try {
+    const { data } = await api.post(`/projects/${id}/unshare`);
+    return data;
+  } catch (err) {
+    return { error: err.response?.data?.message || err.message };
+  }
+};
+
+const deleteProject = async (id) => {
+  try {
+    const { data } = await api.delete(`/projects/${id}`);
+    return data;
+  } catch (err) {
+    return { error: err.response?.data?.message || err.message };
+  }
+};
+
+export default { getMyProjects, createProject, getProject, addMember, getPublicProject, shareProject, unshareProject, deleteProject };

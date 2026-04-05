@@ -11,6 +11,15 @@ const api = axios.create({
 const storedToken = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
 if (storedToken) api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
 
+// Request logger to aid debugging (prints url and whether Authorization header present)
+api.interceptors.request.use(cfg => {
+  try {
+    const auth = !!cfg.headers?.Authorization;
+    console.debug('[api] Request', cfg.method?.toUpperCase(), cfg.baseURL + cfg.url, 'auth=', auth);
+  } catch (e) {}
+  return cfg;
+}, err => Promise.reject(err));
+
 export const setAuthToken = (token) => {
   if (token) api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   else delete api.defaults.headers.common['Authorization'];
